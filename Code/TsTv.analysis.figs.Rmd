@@ -15,7 +15,8 @@ output:
 ---
 Note: "#C" comments are some commented out checks of the code.
 
-#Setup & Initial Parsing of Data
+#Analysis
+##Setup & Initial Parsing of Data
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = T, warnings = FALSE, message = F)
 library(knitr)
@@ -1018,7 +1019,7 @@ tev | 5 | RF | SEM
 f1 | 3, but-6 for wt | RFE | SEM
 
 *5 for mutants, but may be only 3 for the progenitor of the mutants they were comparing fitness to, thus N would be...3. Unclear from paper.
-#AUC-All and Viable Detrimental Missense Mutations
+##AUC-All and Viable Detrimental Missense Mutations
 Calculate AUC for each individual dataset, using all of the detrimental mutations and only the viable detrimental missense mutations. Below also calculates AUC for all mutations including beneficial ones, all viable mutations including beneficial ones, and each of these subsets with and without nonsense mutations, which are not discussed in paper.
 ```{r AUC.AllViable}
 #stat fnxs----
@@ -1190,7 +1191,7 @@ each$Study = factor(each$Study,
 ```
 
 
-#AUC-Increasing Thresholds
+##AUC-Increasing Thresholds
 Calculate AUC for TS-TV fitness differences for missense mutations equal to or greater than a fitness level threshold.  
 Do for only detrimental or neutral mutations, with last threshold being .9.
 ```{r INC.THRESHOLDS2AUC}
@@ -1362,7 +1363,7 @@ bloom_studs = c(bloom_flu_studs,"HIV_ENV")
 ```
 
 
-#AUC-Decreasing Thresholds
+##AUC-Decreasing Thresholds
 Calculate AUC for Ts-Tv fitness differences for mutants equal to or less than a fitness level threshold. Only detrimental or nuetral missense mutations.  
 ```{r DEC..THRESHOLDS2AUC}
 #stat fnxs----
@@ -1460,7 +1461,7 @@ dec_thresholds %<>% subset(!is.nan(p.value %>% as.vector %>% as.numeric))
 ```
 
 
-#Fisher Thresholds
+##Fisher Thresholds
 Perform fisher analysis on detrimental or neutral missense mutations. Can use below code to do same thing for beneficial mutations, commented out below. Note that the bloom DMS studies have no mutations annotated as lethal, so cannot do first threshold of 0 for those.
 ```{r FISHER}
 #stat fnxs----
@@ -1737,7 +1738,7 @@ fisher.other.det = rbind(
 ```
 
 
-#CDFs
+##CDFs
 Calculated for all studies but in paper only Bloom DMS, Lauring, and HIV studies are shown.
 ```{r CDF}
 #sub for cdf
@@ -1786,7 +1787,7 @@ cdf.df$Study = factor(cdf.df$Study,levels = c("Lauring","Lauring_gw","Lauring_xH
 ```
 
 
-#Ts-Tv Fitness Difference within Radical (R) or Conservative Categories (C)
+##Ts-Tv Fitness Difference within Radical (R) or Conservative Categories (C)
 ```{r TSTV.RC}
 #mk r/c dataframes---- 
 #get the r/c distincitons first.
@@ -2188,7 +2189,7 @@ c.cdf = lapply(bloom.rc$c,function(type){
 ```
 
 
-#Radical-Conservative Fitness Differences
+##Radical-Conservative Fitness Differences
 Are radical amino acid changes more detrimental than conservative ones?
 
 Calculates for only detrimental & netural (shown in paper), for all mutations (not shown in paper), for only beneficials mutations (not shown in paper), and for only substitutions accessible by either a Ts or a Tv and not by both (shown in paper), all substitutions accessible by a single point mutation (not shown in paper), substitutions accessible by only more than one mutation and not single mutations (not shown in paper), and all substitutions (not shown in paper). In addition to genes from Bloom DMS studies, calculates for flu genes as well as HIV IN and CA (not shown in paper).
@@ -2511,7 +2512,7 @@ rc.cdf.env.pl = rc.cdf.mkall.pl.fnx(flu.hiv = "HIV.ENV")
 ```
 
 
-#Check Bloom DMS Data Code
+##Check Bloom DMS Data Code
 Check some further things in Bloom data and in all_studies, see comments.
 ```{r CHECK.BLOOM}
 #C
@@ -2785,7 +2786,7 @@ Check some further things in Bloom data and in all_studies, see comments.
 Everything checks out.
 
 
-#Power Simulations
+##Power Simulations
 Simulate power of smaller studies (F1,qb,VSV,TEV) by drawing randomly their N fitness values from our study x1000 and then directly calculating AUC from that or creating a normal distribution around each fitness value using the respective study's average fitness standard deviation and drawing from that distribution to then calculate AUC (should come up with pretty much the same power each way).  Also create a null distribution of TS-TV bias by randomizing the TS-TV labels among the fitness values in our study x1000 and calculating AUC. Power for each study can be either the number of times the simulation detected an AUC higher than 5% of the highest AUC calculated in the null distribution divided by 1000, or simply the number of times the simulation detected a .05 p-value for AUC divided by 1000. I used the slightly easier way to code it for paper, which is the latter. I also performed an additional simulation for studies that had info on the measurement error-in addition to drawing mutations randomly, I created a normal distribution around the mean of each drawn mutation and drew a value from that distribution, to kind of simulate effect of measurement error on power, this is not shown in paper either.
 
 I calculated power for each of the different AUC calculations from section "AUC-All and Viable Detrimental Missense Mutations", matching the N of each study for that calculation type. Did with and without stop mutations, only without stop mutations shown in paper.
@@ -3020,7 +3021,7 @@ power_sd_sim = power_studies_sets(data_frame = sd_sims, sim_studs = q1_sd_sim_st
 #end----
 ```
 
-#Lauring-Bloom Correlations (Spearman)
+##Lauring-Bloom Correlations (Spearman)
 ```{r CORR_BLOOM_LA}
 library(Hmisc)
 #prep bloom----
@@ -3130,11 +3131,12 @@ Note on NP correlation: WT E372 in Lauring (H1N1, WSN33) and NP2 (H1N1, PR8) is 
 Note on synonymous mutations: Using synonymous mutations in bloom that are normalized to themselves ("fitness" of 1) to do correlations effectively assumes that all nucleotide mutations that make up that synonymous mutation in the mutational scan are nuetral, while in our data that's not true. It still increases the fit, however, because the synonymous mutations in our data are close to neutral.  Anyway, we didn't have any synonymous mutations in NP only about 3 I think in HA. Paper is shown without using synonymous mutations.
 
 
-#Misc.
+##Misc.
 Some miscellaneous calculations for paper.
 ```{r MISC}
 med.per.gene = rbind(all_studies %>% subset(grepl("Lauring",Study) & S_NS == "NS" & !grepl("Stop|stop",AA_Sub)),all_studies %>% subset(AA_Sub == "NS1 E208stop, NEP M50I")) %>% count(.(Gene)) %>% .$freq %>% median #median number of missense mutations per gene 
 ```
+
 
 
 
@@ -3936,6 +3938,8 @@ In A, filled circles are significant.
 In B, dashed lines = radical, solid lines = conservative
 
 For cdfs, obviously option 2 is better, though option 1 is better in terms of not having so many figures.  For beneficials, if show, option 2 is nescessary.
+
+Figure 4, shown in paper is fitness difference between C and R of mutations used for Ts vs Tv fitness differences, that is, amino acid substitutions accessible by either a single Ts or a single Tv and not both.  Figure is saved as "fig4.tstv".  Other figures here are also made, C vs. R fitness for all amino acid substitutions accessible by by a single point mutation ("fig4.m1") and all amino acid substitutions ("fig4.m123").
 
 
 ###7) Table III: Fisher TsTv OR for C/R
