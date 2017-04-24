@@ -1,0 +1,22 @@
+#J. B Peris et a/. 5 SI			
+A5322G	IV	D368G	-0.526 ± 0.053
+G5389A	IV	None	0.015 ± 0.02
+T5472A	IV	V418D	-1
+C5575A	Intergenic	None	-0.03 ± 0.035
+C5649A	Intergenic	None	-0.458 ± 0.091
+C5727A	Intergenic	None	-0.019 ± 0.013
+A5740C	Intergenic	None	-0.146 ± 0.053
+C5753A	Intergenic	None	-0.008 ± 0.032
+C5771A	Intergenic	None	-0.053 ± 0.024
+G5876A	Intergenic	None	-0.105 ± 0.075
+A5903G	Intergenic	None	0.030 ± 0.028
+C5966A	Intergenic	None	-0.082 ± 0.042
+G6028A	II	R8Q	-0.251 ± 0.026
+G6090A	II	V29I	-0.006 ± 0.044
+T6091A	II	V29E	-1
+T6266A	II	None	-0.051 ± 0.018
+A6276G	II	I91V	-0.152 ± 0.042
+C6286A	II	S94Y	-1
+T6308A	II	None	0.044 ± 0.031
+C6344A	II	C112STOP	-1
+T6362A	II	None	-0.012 ± 0.012

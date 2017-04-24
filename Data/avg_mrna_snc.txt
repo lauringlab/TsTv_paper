@@ -1,0 +1,14 @@
+#Given on sheet of paper by matt 16_09_16. SNC = substitutions/nucleotide/strand copied
+mutation,snc
+AC,1.5e+-5
+AG,2.0e+-4
+AU,1.6e+-5
+CA,7.7e+-6
+CG,5.1e+-6
+CU,2.7e+-5
+GA,3.1e+-5
+GC,6.4e+-5
+GU,3.5e+-5
+UA,1.4e+-5
+UC,2.3e+-4
+UG,2.8e+-5

@@ -1,0 +1,27 @@
+#Table 1.						
+#Information relative to each mutant genotype<comma> including the estimated relative fitness						
+Mutant	Protein	Location	Nucleotide substitution	Amino acid change	Polarity change	Relative fitness (±S.E.M.)
+PC2	P1	158	T ? G	F ? C	Apolar ? polar	0.7656 ± 0.0431*
+PC6	P1	375	A ? G	Synonymous		0.3309 ± 0.0207**
+PC7	P1	475	A ? C	K ? Q	Basic ? polar	0.8171 ± 0.0520
+PC12	P1	872	A ? C	M ? L		0.8961 ± 0.0726
+PC22	HC-Pro	1655	A ? G	N ? S		0.4208 ± 0.0552**
+PC24	HC-Pro	1851	A ? T	Q ? H	Polar ? basic	0.5496 ± 0.0369**
+PC25	HC-Pro	1983	G ? T	K ? N	Basic ? polar	0.8219 ± 0.0560*
+PC26	HC-Pro	2119	A ? T	Synonymous		0.4610 ± 0.0246***
+PC37	P3	3113	A ? C	N ? T		0.7571 ± 0.0456*
+PC40	P3	3238	T ? C	Synonymous		0.7307 ± 0.0533*
+PC41	P3	3406	C ? A	Q ? K	Polar ? basic	0.9080 ± 0.0617
+PC42	P3	3423	G ? C	E ? D		0.3196 ± 0.0313*
+PC49	CI	4418	G ? C	S ? T		0.8002 ± 0.0337**
+PC51	CI	4570	A ? G	I ? V		0.3887 ± 0.0321***
+PC59	CI	5344	A ? G	T ? A	Polar ? apolar	0.7417 ± 0.0378*
+PC60	CI	5349	T ? C	Synonymous		0.8995 ± 0.0244
+PC62	CI	5387	A ? G	N ? S		0.6174 ± 0.0342
+PC63	6K2	5582	A ? G	K ? R		0.9185 ± 0.0403
+PC67	NIa-VPg	6012	T ? G	I ? M		0.7423 ± 0.0764
+PC69	NIa-VPg	6044	C ? A	T ? N		0.8908 ± 0.0334
+PC76	NIa-Pro	6519	T ? C	Synonymous		1.0452 ± 0.0494
+PC77	NIa-Pro	6660	T ? A	Synonymous		0.7665 ± 0.1083
+PC93	NIb	8269	A ? C	I ? L		0.7412 ± 0.0444
+PC95	NIb	8398	G ? T	A ? S	Apolar ? polar	0.5095 ± 0.0222
