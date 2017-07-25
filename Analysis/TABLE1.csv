@@ -1,0 +1,5 @@
+"Gene","Number of Shared Mutations","rho","P value"
+"All",52,0.64,3.8e-07
+"HA (H1N1)",28,0.71,2.5e-05
+"NP (H1N1)",12,0.8,0.002
+"NP (H3N2)",12,0.53,0.073

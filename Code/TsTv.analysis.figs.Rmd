@@ -1,5 +1,6 @@
+
 ---
-title: "Ts_Tv_Full_Analysis"
+title: "Ts_Tv_Analysis_Figures"
 author: "Daniel Lyons"
 date: "October 4, 2016"
 output: 
@@ -982,7 +983,7 @@ prep.bloom = function(df,dtset,study,gene){
            Study = study,
            N = NA
            ) %>%
-    subset(select = c(Mutation,AA_Sub,Fitness.Mean,Fitness.SD,Dataset,Position,TS_TV,S_NS,Gene,Fitness.CV,Study,N)) #,SNC
+    subset(select = c(Mutation,AA_Sub,Fitness.Mean,Fitness.SD,Dataset,Position,TS_TV,S_NS,Gene,Fitness.CV,Study,N))
 }
 
 np.as = prep.bloom(np.annot,"NP","Bloom","NP")
@@ -1365,7 +1366,7 @@ bloom_studs = c(bloom_flu_studs,"HIV_ENV")
 
 ##AUC-Decreasing Thresholds
 Calculate AUC for Ts-Tv fitness differences for mutants equal to or less than a fitness level threshold. Only detrimental or nuetral missense mutations.  
-```{r DEC..THRESHOLDS2AUC}
+```{r DEC.THRESHOLDS2AUC}
 #stat fnxs----
 
 dec.thresholds = seq(.1,1,.1) %>% rev
@@ -2189,7 +2190,7 @@ c.cdf = lapply(bloom.rc$c,function(type){
 ```
 
 
-##Radical-Conservative Fitness Differences
+##R-C Fitness Differences
 Are radical amino acid changes more detrimental than conservative ones?
 
 Calculates for only detrimental & netural (shown in paper), for all mutations (not shown in paper), for only beneficials mutations (not shown in paper), and for only substitutions accessible by either a Ts or a Tv and not by both (shown in paper), all substitutions accessible by a single point mutation (not shown in paper), substitutions accessible by only more than one mutation and not single mutations (not shown in paper), and all substitutions (not shown in paper). In addition to genes from Bloom DMS studies, calculates for flu genes as well as HIV IN and CA (not shown in paper).
@@ -3034,7 +3035,6 @@ prep.bloom.corr = function(df,dtset,study,gene){
            AA_Sub = paste0(WT_AA,Position,AA_Mut),
            Fitness.SD = NA,
            Dataset = dtset,
-           SNC = NA,
            TS_TV = mapvalues(TS_TV,c("TRUE","FALSE","S"),c("TS","TV","S")), #it actually works with T, F as logical  only and without "S" but I think it's probably better to be specific.
            S_NS = mapvalues(S_NS,c(T,F),c("S","NS")),
            Gene = gene,
@@ -3042,7 +3042,7 @@ prep.bloom.corr = function(df,dtset,study,gene){
            Study = study,
            N = NA
     ) %>%
-    subset(select = c(Mutation,AA_Sub,Fitness.Mean,Fitness.SD,Dataset,Position,SNC,TS_TV,S_NS,Gene,Fitness.CV,Study,N))
+    subset(select = c(Mutation,AA_Sub,Fitness.Mean,Fitness.SD,Dataset,Position,TS_TV,S_NS,Gene,Fitness.CV,Study,N))
 
 } #tstv == MUT23 are those aa muts that cannot be reached by single mutations, we don't have those in our analysis so exclude here.
 
@@ -3112,7 +3112,7 @@ bloomxla_corr = rbind(rcorr2df(shared_bloom_la,"All","Both"),
       rcorr2df(shared_bloom_la %>% subset(Gene == "NP" & Dataset == "NP"),"NP_H3N2","NS")
       ) %>% mutate(prev_r = c(NA,NA,NA,NA,.66,NA,.60,.26),prev_p = c(NA,NA,NA,NA,.001,NA,0.0450,0.4031))
 
-
+detach("package:Hmisc", unload = T)
 #end----
 ```
 
@@ -3131,17 +3131,111 @@ Note on NP correlation: WT E372 in Lauring (H1N1, WSN33) and NP2 (H1N1, PR8) is 
 Note on synonymous mutations: Using synonymous mutations in bloom that are normalized to themselves ("fitness" of 1) to do correlations effectively assumes that all nucleotide mutations that make up that synonymous mutation in the mutational scan are nuetral, while in our data that's not true. It still increases the fit, however, because the synonymous mutations in our data are close to neutral.  Anyway, we didn't have any synonymous mutations in NP only about 3 I think in HA. Paper is shown without using synonymous mutations.
 
 
+##Ts vs. Tv Odds of Being Radical
+```{r TsTv.Odds.Radical}
+
+class.counts = function(df){
+  lapply(sets.type,function(class){
+    lapply(c(TS_TV = "TS_TV",S_NS = "S_NS"),function(mut){
+      count(df,vars = c(class,mut))
+    })
+  })
+}
+datasets =  c(NP.H3N2 = "NP.H3N2", NP.H1N1= "NP.H1N1", HA.H1N1 = "HA.H1N1", HIV.ENV = "HIV.ENV")
+
+counts.bloom = lapply(datasets,function(dataset){
+  class.counts(df = dfs %>% subset(dtset == dataset))
+})
+
+
+mk_cont = function(data_frame1 = "null",gene,Class){
+  m = matrix(data = rep(NA,4),
+                nrow = 2,
+                ncol = 2, 
+                byrow = T,
+                dimnames = list(c("TV","TS"),c("R","C"))
+  )
+  
+  df1 = counts.bloom[[gene]][[Class]][["TS_TV"]]
+  
+  m["TV","R"] = df1[df1[,1] == F,] %>% subset(TS_TV == F) %>% .$freq
+  m["TV","C"] = df1[df1[,1] == T,] %>% subset(TS_TV == F) %>% .$freq
+  
+  m["TS","R"] = df1[df1[,1] == F,] %>% subset(TS_TV == T) %>% .$freq
+  m["TS","C"] = df1[df1[,1] == T,] %>% subset(TS_TV == T) %>% .$freq
+  
+  m
+}
+
+cont2stat = function(m,gene,Class){
+  test = fisher.test(m, conf.int = T)
+  data.frame(Gene = gene,
+             Comparison = paste("TV","TS",sep = " vs. "),
+             Class = Class,
+             pvalue = test$p.value,
+             OR = test$estimate,
+             OR_CI95_lower = test$conf.int[1],
+             OR_CI95_upper = test$conf.int[2],
+             row.names = NULL
+             )
+}
+
+
+data2stat = function(data_frame = "null",gene,Class){
+  mk_cont(data_frame,gene,Class) %>% cont2stat(gene,Class)
+}
+
+class.genes2stat = function(data_frame = "null",genes,classes = Classes){
+  lapply(genes,function(g){
+    lapply(classes,function(c){
+      data2stat(data_frame = data_frame,gene = g,Class = c)
+    }) %>% do.call(rbind,.)
+  }) %>% do.call(rbind,.)
+}
+
+
+Classes = c(charge = "charge", polarity = "polarity", pv = "pv")
+g1s = datasets
+
+
+##calc stats
+tstv.rc = rbind(class.genes2stat(genes = g1s))
+
+```
+
+##Ts:Tv Mutation Rate and Substitution Rate Bias
+Use our and bloom's mutation rate data to calculate Ts:Tv mutation rate bias and average the observed influenza Ts:Tv substitution ratio from Duchêne et al.
+
+Duchêne S, Ho SY, Holmes EC. 2015. Declining transition/transversion ratios through time reveal limitations to the accuracy of nucleotide substitution models. BMC Evolutionary Biology 15:36.
+
+```{r TSTV.BIAS}
+
+#Load & Parse Data----
+snc = read.csv("tstv.snc.pauly.csv", stringsAsFactors = F) #load mutation rate data from our lab
+
+sub.rate = read.csv("tstv.sub.bias.duchene.csv", stringsAsFactors = F) #load substitution rate data from Duchene et. al. as cited in manuscript
+
+snc %<>% rename(c("A.Puerto.Rico.8.1934.H1N1" = "pr8","A.Hong.Kong.4801.2014.H3N2" = "hk.h3n2")) %>% mutate(Mutation.class = gsub(" to ","",Mutation.class), pr8 = gsub(" x 10","e",pr8) %>% gsub(" ±.*","",.) %>% as.numeric,hk.h3n2 = gsub(" x 10","e",hk.h3n2) %>% gsub(" ±.*","",.) %>% as.numeric) %>% subset(Mutation.class != "Overallb" & Mutation.class != "",select = c(Mutation.class,pr8,hk.h3n2)) #parse
+
+snc %<>% mutate(ts.tv = ifelse(Mutation.class %in% ts_muts,"Ts","Tv"))
+
+avg.tsTOtv.mut.rate.lauring = ddply(snc,.(ts.tv),summarize, avg.pr8 = mean(pr8),avg.hk.h3n2 = mean(hk.h3n2)) %>% t() %>% as.data.frame %>% rename(c("V1" = "Ts","V2" = "Tv")) %>% subset(Ts != "Ts") %>% mutate(strain = c("pr8","hk.h3n2"), Ts = Ts %>% as.vector %>% as.numeric, Tv = Tv %>% as.vector %>% as.numeric) %>% mutate(tsTotv = Ts/(Tv*2)) #calc ts to tv ratio
+
+
+avg.sub.rate = sub.rate %>% subset(Genus == "Influenzavirus", select = c(Genus,ti.tv)) %>% .$ti.tv %>% mean
+
+sng = read.csv("bloom.mut.rate.est.csv",stringsAsFactors = F) #load mutation rate data from bloom 2014 paper. It is substitions per nucleotide per tissue culture generation
+sng %<>% mutate(Mutation.Type = gsub(".*\\(","",Mutation.Type) %>% gsub(").*","",.), Rate = Rate %>% as.vector %>% as.numeric) %>% subset(grepl("tran",Mutation.Type),select = -c(X)) 
+
+avg.tsTOtv.mut.rate.bloom = ddply(sng,~Mutation.Type,summarize,average = mean(Rate)) %>% t() %>% as.data.frame %>% rename(c("V1" = "Ts","V2" = "Tv")) %>% subset(Ts != "transition" & Tv != "transversion")  %>% mutate(Ts = Ts %>% as.vector %>% as.numeric, Tv = Tv %>% as.vector %>% as.numeric) %>% mutate(tsTotv = Ts/(Tv*2)) #calc ts to tv ratio for bloom data.
+
+```
+
 ##Misc.
 Some miscellaneous calculations for paper.
 ```{r MISC}
 med.per.gene = rbind(all_studies %>% subset(grepl("Lauring",Study) & S_NS == "NS" & !grepl("Stop|stop",AA_Sub)),all_studies %>% subset(AA_Sub == "NS1 E208stop, NEP M50I")) %>% count(.(Gene)) %>% .$freq %>% median #median number of missense mutations per gene 
 ```
-
-
-
-
-
-
 
 #Figures
 ##Setup
@@ -3149,7 +3243,6 @@ med.per.gene = rbind(all_studies %>% subset(grepl("Lauring",Study) & S_NS == "NS
 # library(extrafont)
 knitr::opts_chunk$set(echo = T, warnings = FALSE, message = F)
 # detach("package:seqinr", unload = T)
-detach("package:Hmisc", unload = T)
 
 
 library(knitr)
@@ -3170,12 +3263,11 @@ setwd(analysis.path)
 
 ##Main Figures & Tables
 1) Fig. 1: AUC Thresholds - Influenza
-2) Table I: N & Power
 3) Fig. 2: Fisher & CDF -  Influenza & HIV
-4) Table II: Spearman - Bloom vs. Lauring
+4) Table 1: Spearman - Bloom vs. Lauring
 5) Fig. 3: Fisher & CDF - TsTv - Bloom
 6) Fig. 4: Fisher & CDF - C/R
-7) Table III: Fisher TsTv OR for C/R
+7) Table 2: Fisher TsTv OR for C/R
 8) Fig. 5 & 6: Fisher & CDF - TsTv Among C/R
 
 ###1) Fig. 1: AUC Thresholds - Influenza
@@ -3217,6 +3309,8 @@ map.xstop = function(col){
 #data----
 fig1.dat = thresholds %>% subset(gr.xstop(Study) & !grepl("Lauring_gw|Bloom_Flu|Bloom_H1N1",Study)) %>% mutate(Study = map.xstop(Study)) %>% mutate(Study = factor(Study,levels = c(other.levels,bl.levels)))
 fig1.dat$p.value = fig1.dat$p.value %>% as.vector %>% as.numeric
+
+fig1.table = fig1.dat %>% subset(grepl("Total|Surface|Internal",Study), select = c(Study,threshold,auc,p.value)) %>% rename(c(auc = "AUC",Study = "Dataset",threshold = "Rel. Fitness Threshold"))
 
 #pl & stats fnxs----
 ##stats fnxs----
@@ -3297,15 +3391,29 @@ xlabel.pl = function(study,fish.cdf){
   }
 }
 
-sig.pl = function(dat,sig.level,bonf = T,nhypo = NULL){
-  if(bonf){
-    sig.level %<>% bonf.corr(nhypo)
+sig.pl = function(dat,sig.level=.05,corr.method = "holm",nhypo = NULL){
+  if(corr.method != "NONE"){
+    
+    if(corr.method == "bonf"){
+      sig.level %<>% bonf.corr(nhypo)
+    }
+    
+    else{
+      subsets = dat %>% names
+      
+      for(x in c("p.val","N_TS","N_TV","auc","thresh","OR","total")){subsets = remove_elements(subsets,x,whole = F)}
+    }
+    
+    if(corr.method == "holm"){
+      dat %<>% ddply(subsets,mutate,p.value = p.adjust(p = p.value,method = "holm")) #calculate adjusted p values according to subset.
+    } #for some reason stupid ddply wouldn't work with inputting corr.method as fnx variable, ketp saying object "corr.method" not found. I think it thinks its supposed to refer to dataframe column and for some reason doesn't look in wider environment.
+    
   }
+  
   dat %<>% mutate(sig = ifelse(p.value<sig.level,paste0("p<",sig.level),paste0("p>=",sig.level)))
   dat$sig %<>% factor(levels = c(paste0("p>=",sig.level),paste0("p<",sig.level))) #so levels goes no sig and then sig, thus in alpha (transparency) put 0,1
   dat
 }
-
 
 faceting = function(pl,Facet,Scales){
   if(Facet == "Study"){
@@ -3319,6 +3427,9 @@ faceting = function(pl,Facet,Scales){
   }
   if(Facet == "Mutations"){
     pl = pl+facet_grid(~Mutations,scales = Scales)
+  }
+  if(Facet == "NULL"){
+    pl = pl
   }
   pl
 }
@@ -3368,16 +3479,17 @@ fig1.fnx = function(dat = fig1.dat,
                     y.off = F,
                     x.off = F,
                     facet.label.off = F,
-                    bonf = F,
+                    corr.method = "NONE",
                     nhypo = 10,
                     point.size = 4,
-                    font.size = global.font.size){
+                    font.size = global.font.size,
+                    rel.axis.size = .65){
   
   dat %<>% ddply(.(Study),mutate,n.ts = c(paste0("TS:",N_TS)[1:2], rep(NA,length(N_TS)-2)), n.tv = c(paste0("TV:",N_TV)[1:2], rep(NA,length(N_TV)-2))) #annotate N of first 2 data points (so lethals and viables)
   
   dat %<>% sub.pl(study)
   
-  dat %<>% sig.pl(sig.level,bonf,nhypo)
+  dat %<>% sig.pl(sig.level,corr.method,nhypo)
   
   pl = ggplot(data = dat, aes(x = threshold, y = auc, group = Study))+
     geom_point(stat = "identity", size = point.size)+
@@ -3402,7 +3514,70 @@ fig1.fnx = function(dat = fig1.dat,
     facet_grid(Study~.)+
     theme_cowplot(font_size = font.size)+
     theme(legend.position = "none",
-          axis.text = element_text(size = rel(.65))
+          axis.text = element_text(size = rel(rel.axis.size))
+    )
+  # #can also use below for specific legend ctrl:
+  # +guides(alpha = F)
+  # +guides(linetype = F)
+  
+  pl %<>% x.ticks()
+  pl %<>% text.fnx(text.off)
+  pl %<>% axes(y.off,x.off)
+  pl %<>% facet.label(facet.label.off)
+  
+  #return
+  pl
+}
+
+smbe.fig1.fnx = function(dat = fig1.dat,
+                    sig.level = .05,
+                    study = NULL,
+                    title = study,
+                    Facet = "Study",
+                    Scales = "fixed",
+                    text.off = T,
+                    y.off = F,
+                    x.off = F,
+                    facet.label.off = F,
+                    corr.method = "NONE",
+                    nhypo = 10,
+                    point.size = 4,
+                    font.size = global.font.size,
+                    rel.axis.size = .65,
+                    outline.size = 0){
+  
+  dat %<>% ddply(.(Study),mutate,n.ts = c(paste0("TS:",N_TS)[1:2], rep(NA,length(N_TS)-2)), n.tv = c(paste0("TV:",N_TV)[1:2], rep(NA,length(N_TV)-2))) #annotate N of first 2 data points (so lethals and viables)
+  
+  dat %<>% sub.pl(study)
+  
+  dat %<>% sig.pl(sig.level,corr.method,nhypo)
+  
+  pl = ggplot(data = dat, aes(x = threshold, y = auc, group = Study))+
+    geom_point(stat = "identity", size = point.size)+
+    geom_line()+
+    geom_point(stat = "identity",
+               size = point.size,
+               shape =21,
+               fill = "white",
+               color = "black",
+               stroke = outline.size)+ #plot outlines of all points.
+    geom_point(stat = "identity",
+               size = point.size,
+               mapping  = aes(alpha = sig))+
+    scale_alpha_manual(values =c(0,1))+ #plot solid fill for all sig points.
+    ylim(0,1)+
+    xlab("Relative Fitness Threshold")+
+    ylab("AUC")+
+    geom_hline(aes(yintercept = .5))+
+    ggtitle(title)
+  
+  pl %<>% faceting(Facet,Scales)
+  
+  pl = pl+
+    facet_grid(Study~.)+
+    theme_cowplot(font_size = font.size)+
+    theme(legend.position = "none",
+          axis.text = element_text(size = rel(rel.axis.size))
     )
   # #can also use below for specific legend ctrl:
   # +guides(alpha = F)
@@ -3429,6 +3604,12 @@ fig1 = ggdraw()+draw_plot(fig1,0,.03,1,.97)+draw_label("Relative Fitness Thresho
 
 pres.fig1 = fig1.fnx(study = c("Total","Internal","Surface"),title = NULL,text.off = F)+facet_grid(~Study)+xlab("Relative Fitness Threshold")
 
+#smbe
+fig1.smbe = smbe.fig1.fnx(study = "Internal",title = "Internal Proteins",text.off = F,facet.label.off = T,font.size = 28,point.size = 9,rel.axis.size = .85,outline.size = 1)
+
+ggsave("fig1.smbe.png",fig1.smbe,width = 9.13,height =6.5, units = "in")
+
+
 #end----
 ```
 
@@ -3437,32 +3618,7 @@ Filled circles are significant. (could use stars here, but to be consistent with
 As St. & Norris did a one-tailed test for AUC, did a one-tailed test here as well. Two tailed for rest of fisher studies is good.
 
 
-###2) Table I: N & Power
-```{r TABLE.I}
-n = each %>% subset(grepl("STOP",set) & (set == "detrimental_xSTOP"|set == "detrimental & viable_xSTOP") & Study != "Bloom_Flu" & Study != "Lauring_gw", select = c(Study, set, N_TS,N_TV)) 
-
-n$Study = n$Study %>% as.vector
-n$set = n$set %>% as.vector
-
-n.both = ddply(n,.(Study,set), summarize, TS = N_TS, TV = N_TV, Total = N_TS+N_TV) %>% mutate(set = mapvalues(set, c("detrimental_xSTOP", "detrimental & viable_xSTOP"), c("All","Viable")),Study = map.xstop(Study))
-
-power = as.data.frame(power_n_sim) %>% 
-  mutate(set = rownames(power_n_sim)) %>%
-  subset(set == "detrimental_xSTOP" | set == "detrimental & viable_xSTOP") %>%
-  melt(.(set)) %>%
-  mutate(set = mapvalues(set, c("detrimental_xSTOP", "detrimental & viable_xSTOP"), c("All","Viable"))) %>%
-  rename(c(variable = "Study", value = "Power")) %>%
-  mutate(Power = Power * 100,Study = map.xstop(Study))
-
-power = subset(n.both,! Study %in% power$Study, select = c(Study, set)) %>% mutate(Power = NA) %>% rbind(power)
-
-table1 = merge(n.both,power) %>% arrange(set,-Total) %>% mutate(set = mapvalues(set,"All","All Fitness Levels")) %>% rename(c(Study = "Dataset"))
-
-```
-Rearranged in excel and "All" changed to "All Fitness Levels."
-
-
-###3) Fig. 2: Fisher & CDF -  Influenza & HIV
+###2) Fig. 2: Fisher & CDF -  Influenza & HIV
 ```{r FIG2}
 #data----
 fig2.fish.dat = fisher.other.det %>% subset(gr.xstop(Study) & !grepl("Lauring_gw",Study)) %>% mutate(Study = map.xstop(Study)) %>% mutate(Study = factor(Study,c(other.levels,bl.levels)))
@@ -3472,6 +3628,7 @@ fig2.cdf.dat = cdf.df %>% subset(!grepl("Lauring_gw",Study) & Study != "Internal
 
 fig2.cdf.dat = fig2.cdf.dat %>% subset(Study == "HIV IN"|Study == "HIV CA") %>% mutate(Study = "HIV Combined") %>% rbind(fig2.cdf.dat) %>% mutate(Study = factor(Study,c(other.levels,bl.levels)))
 
+fig2.table = fig2.fish.dat %>% subset(select = c(Study,threshold,OR,p.value)) %>% rename(c(Study = "Dataset",threshold = "Rel. Fitness Threshold",OR = "Odds Ratio"))
 
 #pl fnx----
 fig2.fish.fnx = function(dat = fig2.fish.dat,
@@ -3490,14 +3647,15 @@ fig2.fish.fnx = function(dat = fig2.fish.dat,
                          x.off = F,
                          facet.label.off = T,
                          font.size = global.font.size,
-                         bonf = T,
+                         corr.method = "holm",
                          nhypo = 10,
-                         point.size = 2
+                         point.size = 2,
+                         rel.axis.size = .65
 ){
 
   dat %<>% sub.pl(study)
   xlabel = xlabel.pl(bl.other,fish.cdf = "fish")
-  dat %<>% sig.pl(sig.level,bonf,nhypo)
+  dat %<>% sig.pl(sig.level,corr.method,nhypo)
   lims = xlims(dat,set)
 
   #plot
@@ -3529,7 +3687,81 @@ fig2.fish.fnx = function(dat = fig2.fish.dat,
     expand_limits(y = 0)+
     theme_cowplot(font_size = font.size)+
     theme(legend.position = "none",
-          axis.text = element_text(size = rel(.65))
+          axis.text = element_text(size = rel(rel.axis.size))
+    )
+  
+  pl %<>% x.ticks()
+  pl %<>% text.fnx(text.off)
+  if(use.ylims){
+    pl = pl+ylim(0,ylims(dat,ymax.study)$ymax)
+  }
+  pl %<>% axes(y.off,x.off)
+  pl %<>% facet.label(facet.label.off)
+  
+  #return
+  pl
+}
+
+smbe.fig2.fish.fnx = function(dat = fig2.fish.dat,
+                         sig.level = .05,
+                         study = NULL,
+                         bl.other = "other",
+                         set = "Detrimentals",
+                         title = study,
+                         Group = "Study",
+                         Facet = "Study", #otherwise use "none"
+                         Scales = "fixed", #can be "free","free_x","free_y",
+                         text.off = T,
+                         use.ylims = T,
+                         ymax.study = study,
+                         y.off = F,
+                         x.off = F,
+                         facet.label.off = T,
+                         font.size = global.font.size,
+                         corr.method = "holm",
+                         nhypo = 10,
+                         point.size = 2,
+                         rel.axis.size = .65,
+                         outline.size = 1
+){
+
+  dat %<>% sub.pl(study)
+  xlabel = xlabel.pl(bl.other,fish.cdf = "fish")
+  dat %<>% sig.pl(sig.level,corr.method,nhypo)
+  lims = xlims(dat,set)
+
+  #plot
+  pl = ggplot(data = dat, aes(x = threshold,
+                              y = ifelse(OR == Inf,
+                                         OR_CI95_lower,
+                                         OR)
+  )
+  )+
+    geom_point(stat = "identity",
+               size = point.size,
+               shape =21,
+               fill = "white",
+               color = "black",
+               stroke = outline.size)+ #plot outlines of all points.
+    geom_point(stat = "identity",
+               size = point.size,
+               # shape = 21,
+               mapping  = aes(alpha = sig))+
+    scale_alpha_manual(values = c(0,1))+ #plot solid fill for all sig points, see sig.level fnx, makes >=.05 first level in factor, so 0,1 for alpha.
+    geom_line(aes(group = if(Group == "Class"){Class}else if(Group == "Mutations"){Mutations} else if(Group == "Set"){Set} else{Study}))+
+    xlab(xlabel)+
+    ylab("Odds Ratio")+
+    geom_hline(aes(yintercept = 1))+
+    ggtitle(title)
+  # +xlim(lims$xmin,lims$xmax)
+
+  pl %<>% faceting(Facet,Scales)
+  
+  pl = pl+
+    expand_limits(y = 0)+
+    theme_cowplot(font_size = font.size)+
+    theme(legend.position = "none",
+          axis.text = element_text(size = rel(rel.axis.size))
     )
   
   pl %<>% x.ticks()
@@ -3556,7 +3788,8 @@ fig2.cdf.fnx = function(dat = fig2.cdf.dat,
                         y.off = F,
                         x.off = F,
                         facet.label.off = T,
-                        font.size = global.font.size
+                        font.size = global.font.size,
+                        rel.axis.size = .65
 ){
   
   dat %<>% sub.pl(study)
@@ -3580,7 +3813,7 @@ fig2.cdf.fnx = function(dat = fig2.cdf.dat,
   pl = pl+
     theme_cowplot(font_size = font.size)+
     theme(legend.position = "none",
-          axis.text = element_text(size = rel(.65))
+          axis.text = element_text(size = rel(rel.axis.size))
     )
   
   pl %<>% x.ticks()
@@ -3641,6 +3874,58 @@ pres.fig2.cdf.fnx = function(dat = fig2.cdf.dat,
   pl
 }
 
+
+smbe.fig2.cdf.fnx = function(dat = fig2.cdf.dat,
+                        study = NULL,
+                        bl.other = "other",
+                        set = "Detrimentals",
+                        title = study,
+                        Facet = "Study",
+                        Scales = "fixed", #can be "free","free_x","free_y"
+                        text.off = T,
+                        y.off = F,
+                        x.off = F,
+                        facet.label.off = T,
+                        font.size = global.font.size,
+                        rel.axis.size = .65,
+                        line.size = 1
+){
+  
+  dat %<>% sub.pl(study)
+  lims = xlims.cdf(set = "Detrimentals")
+  dat %<>% subset(Fitness.Mean<=lims$xmax & Fitness.Mean>=lims$xmin)
+  xlabel = xlabel.pl(bl.other,fish.cdf = "cdf")
+  
+  #plot
+  pl = ggplot(data = dat, aes(x = Fitness.Mean))+
+    stat_ecdf(size = line.size,
+              aes(linetype=TS_TV,
+                  color = TS_TV
+                  )
+    )+
+  scale_linetype_manual(values = c("TS" = "solid","TV" = "solid"))+ #used longdash before
+  scale_color_manual(values = c("TS" = "blue","TV" = "red"))+
+    ylab("Percentile")+
+    xlab(xlabel)+
+    ggtitle(title)
+  
+  pl %<>% faceting(Facet,Scales)
+
+  pl = pl+
+    theme_cowplot(font_size = font.size)+
+    theme(legend.position = "none",
+          axis.text = element_text(size = rel(rel.axis.size))
+    )
+  
+  pl %<>% x.ticks()
+  pl %<>% text.fnx(text.off)
+  pl %<>% axes(y.off,x.off)
+  pl %<>% facet.label(facet.label.off)
+  
+  #return
+  pl
+}
+
 #Faceting with facet titles cdf only, all axes titles-seems to be the best.----
 fig2.cdf.flu = fig2.cdf.fnx(study = c("Total","Internal","Surface"),title = NULL,text.off = F,facet.label.off = F)
 fig2.fish.flu = fig2.fish.fnx(study = c("Total","Internal","Surface"),title = NULL,text.off = F)
@@ -3654,16 +3939,24 @@ fig2 = plot_grid(fig2.cdf.flu,fig2.fish.flu,fig2.cdf.hiv,fig2.fish.hiv,rel_heigh
 pres.fig2.cdf.int = pres.fig2.cdf.fnx(study = "Internal",facet.label.off = F,text.off = F,title = NULL)
 pres.fig2.fish.int = fig2.fish.fnx(study = "Internal",title = NULL, text.off = F, facet.label.off = F)
 
+#smbe
+fig2.cdf.smbe = smbe.fig2.cdf.fnx(study = "Internal",title = "Internal Proteins",text.off = F,facet.label.off = T,font.size = 28,rel.axis.size = .85,line.size = 2)
+ggsave("fig2.cdf.smbe.png",fig2.cdf.smbe,width = 9.13,height =6.5, units = "in")
+
+fig2.fish.smbe = smbe.fig2.fish.fnx(study = "Internal",title = "Internal Proteins",text.off = F,facet.label.off = T,point.size = 9,font.size = 28,rel.axis.size = .85)
+ggsave("fig2.fish.smbe.png",fig2.fish.smbe,width = 9.13,height =6.5, units = "in")
+
+
 #end----
 ```
 
-###4) Table II: Spearman - Bloom vs. Lauring
-```{r TABLEII}
+###4) Table 1: Spearman - Bloom vs. Lauring
+```{r TABLE1}
 
-table2 = bloomxla_corr %>% subset(Corr != "H1N1" & S_NS != "Both", select = c(Corr, n, r, p)) %>% mutate(Corr = map.xstop(Corr)) %>% rename(c(Corr = "Gene", n = "Number of Shared Mutations", r = "rho")) %>% mutate(rho = rho %>% round(2), p = p %>% signif(digits = 2)) %>% rename(c(p = "P value"))
+table1 = bloomxla_corr %>% subset(Corr != "H1N1" & S_NS != "Both", select = c(Corr, n, r, p)) %>% mutate(Corr = map.xstop(Corr)) %>% rename(c(Corr = "Gene", n = "Number of Shared Mutations", r = "rho")) %>% mutate(rho = rho %>% round(2), p = p %>% signif(digits = 2)) %>% rename(c(p = "P value"))
 
 # #asterisks instead of p values:
-# table2 = bloomxla_corr %>% subset(Corr != "H1N1" & S_NS != "Both", select = c(Corr, n, r, p)) %>% mutate(Corr = map.xstop(Corr)) %>% rename(c(Corr = "Gene", n = "Number of Shared Mutations", r = "rho")) %>% mutate(sig = ifelse(p<.01,"*",""), rho = rho %>% round(2)) %>% mutate(rho = paste0(rho,sig)) %>% subset(select = - c(sig,p))
+# table1 = bloomxla_corr %>% subset(Corr != "H1N1" & S_NS != "Both", select = c(Corr, n, r, p)) %>% mutate(Corr = map.xstop(Corr)) %>% rename(c(Corr = "Gene", n = "Number of Shared Mutations", r = "rho")) %>% mutate(sig = ifelse(p<.01,"*",""), rho = rho %>% round(2)) %>% mutate(rho = paste0(rho,sig)) %>% subset(select = - c(sig,p))
 
 ```
 For HA, we have 3 synonymous mutations that are obviously the WT in the bloom data, so I excluded them from the correlation analysis, because the relative site preference will obviously be 1 no matter what because of how we calculate relative site preference (although our synonymous mutations might not be 1), so I don't think such points are informative, and likely would inflate correlation. See section above "Lauring-Bloom Correlations (Spearman)" for more info.
@@ -3684,6 +3977,8 @@ fig3.cdf.dat = fig2.cdf.dat %>% subset(Study %in% bl.levels)
 fig3.fish.dat$Study = factor(fig3.fish.dat$Study,levels = bl.levels)
 fig3.cdf.dat$Study = factor(fig3.cdf.dat$Study,levels = bl.levels)
 
+fig3.table = fig3.fish.dat %>% subset(select = c(Study,threshold,OR,OR_CI95_lower,p.value)) %>% rename(c(Study = "Dataset",threshold = "Rel. Site Pref. Cutoff",OR = "Odds Ratio"))
+
 # if("HIV.ENV" %in% study){
   #   pl = pl + ylim(0,
   #        max(dat %>% subset(OR==Inf) %>% .$OR_CI95_lower,
@@ -3702,7 +3997,17 @@ fig3.fish.surf = fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = bl.le
 fig3 = plot_grid(fig3.cdf.int,fig3.fish.int,fig3.cdf.surf,fig3.fish.surf,rel_heights = c(.6,.4,.6,.4),nrow = 4,align = "v",labels = c("A","","B"), label_size = pl.lab.font.size)
 
 #pres
-pres.fig3.fish.flu = fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = bl.levels[1:3],title = NULL,use.ylims = F,text.off = F,point.size = 3.5,facet.label.off = F,bonf = F)
+pres.fig3.fish.flu = fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = bl.levels[1:3],title = NULL,use.ylims = F,text.off = F,point.size = 3.5,facet.label.off = F,corr.method = "NONE")
+
+
+#smbe
+fig3.int.smbe = smbe.fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = bl.levels[1:2],title = NULL,use.ylims = F,text.off = F,point.size = 9,font.size = 32, rel.axis.size = .85, facet.label.off = F)
+
+fig3.surf.smbe = smbe.fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = bl.levels[3:4],title = NULL,use.ylims = F,text.off = F,point.size = 9,font.size = 32, rel.axis.size = .85, facet.label.off = F)
+
+fig3.smbe = plot_grid(fig3.int.smbe,fig3.surf.smbe,nrow = 2,align = "hv")
+
+ggsave("fig3.smbe.png",fig3.smbe,width = 19.33,height = 12.37, units = "in")
 
 
 #end----
@@ -3736,6 +4041,7 @@ fig4.fish.dat$Study = factor(fig4.fish.dat$Study,levels = bl.levels)
 
 fig4.cdf.dat$Study = factor(fig4.cdf.dat$Study,levels = bl.levels)
 
+fig4.table = fig4.fish.dat %>% subset(Mutations == "TS.TV.Only" & Set == "Detrimentals", select = c(Study,Class,threshold,OR,p.value)) %>% rename(c(Study = "Dataset",threshold = "Rel. Site Pref. Cutoff",OR = "Odds Ratio"))
 
 #pl fnx----
 fig4.fish.fnx = function(dat = fig4.fish.dat,
@@ -3758,13 +4064,14 @@ fig4.fish.fnx = function(dat = fig4.fish.dat,
                          facet.label.off = T,
                          font.size = global.font.size,
                          point.size = 2,
-                         bonf = T,
-                         nhypo = 19
+                         corr.method = "holm",
+                         nhypo = 19,
+                         rel.axis.size = .65
 ){
   
   dat %<>% sub.pl(study,muts,set,class)
   xlabel = xlabel.pl(bl.other,fish.cdf = "fish")
-  dat %<>% sig.pl(sig.level,bonf,nhypo)
+  dat %<>% sig.pl(sig.level,corr.method,nhypo)
   lims = xlims(dat,set)
   
   #plot
@@ -3797,7 +4104,83 @@ fig4.fish.fnx = function(dat = fig4.fish.dat,
     expand_limits(y = 0)+
     theme_cowplot(font_size = font.size)+
     theme(legend.position = "none",
-          axis.text = element_text(size = rel(.65))
+          axis.text = element_text(size = rel(rel.axis.size))
+    )
+  pl %<>% x.ticks()
+  pl %<>% text.fnx(text.off)
+  if(use.ylims){
+    pl = pl+ylim(0,ylims(dat,ymax.study)$ymax)
+  }
+  pl %<>% axes(y.off,x.off)
+  pl %<>% facet.label(facet.label.off)
+  #return
+  pl
+}
+
+smbe.fig4.fish.fnx = function(dat = fig4.fish.dat,
+                         sig.level = .05,
+                         study = NULL,
+                         bl.other = "bl",
+                         muts = NULL,
+                         set = NULL,
+                         class = NULL,
+                         title = class,
+                         Group = "Class",
+                         Color = "Class",
+                         Facet = "Study",
+                         Scales = "fixed", #can be "free","free_x","free_y"
+                         text.off = T,
+                         use.ylims = T,
+                         ymax.study = study,
+                         y.off = F,
+                         x.off = F,
+                         facet.label.off = T,
+                         font.size = global.font.size,
+                         point.size = 2,
+                         corr.method = "holm",
+                         nhypo = 19,
+                         rel.axis.size = .65,
+                         outline.size = 1
+){
+  
+  dat %<>% sub.pl(study,muts,set,class)
+  xlabel = xlabel.pl(bl.other,fish.cdf = "fish")
+  dat %<>% sig.pl(sig.level,corr.method,nhypo)
+  lims = xlims(dat,set)
+  
+  #plot
+  pl = ggplot(data = dat, aes(x = threshold,
+                              y = ifelse(OR == Inf,
+                                         OR_CI95_lower,
+                                         OR),color = if(Color == "Class"){Class}else if(Color == "Mutations"){Mutations} else if(Color == "Set"){Set} else{Study}
+  )
+  )+
+    scale_color_manual(values = c("black","red","blue","green"),name = Color)+
+    geom_point(stat = "identity",
+               size = point.size,
+               shape =21,
+               fill = "white",
+               stroke = outline.size)+ #plot outlines of all points.
+    geom_point(stat = "identity",
+               size = point.size,
+               stroke = outline.size,
+               # shape = 21,
+               mapping  = aes(alpha = sig))+
+    scale_alpha_manual(values =c(0,1))+  #plot solid fill for all sig points, see sig.level fnx, makes >=.05 first level in factor, so 0,1 for alpha.
+    geom_line(aes(group = if(Group == "Class"){Class}else if(Group == "Mutations"){Mutations} else if(Group == "Set"){Set} else{Study}))+
+    xlab(xlabel)+
+    ylab("Odds Ratio")+
+    geom_hline(aes(yintercept = 1))+
+    ggtitle(title)+
+    xlim(lims$xmin,lims$xmax)
+  
+  pl %<>% faceting(Facet,Scales)
+  
+  pl = pl+
+    expand_limits(y = 0)+
+    theme_cowplot(font_size = font.size)+
+    theme(legend.position = "none",
+          axis.text = element_text(size = rel(rel.axis.size))
     )
   pl %<>% x.ticks()
   pl %<>% text.fnx(text.off)
@@ -3897,6 +4280,11 @@ fig4.fish.surf.tstv = fig4.fish.fnx(muts = "TS.TV.Only",set = "Detrimentals",stu
 
 fig4.tstv = plot_grid(fig4.cdf.int.tstv,fig4.fish.int.tstv,fig4.cdf.surf.tstv,fig4.fish.surf.tstv,rel_heights = c(.6,.4,.6,.4),nrow = 4,align = "v",labels = c("A","","B"), label_size = pl.lab.font.size)
 
+#SMBE
+fig4.smbe = smbe.fig4.fish.fnx(muts = "TS.TV.Only",set = "Detrimentals",study = bl.levels[4],title = NULL,text.off = F, font.size = 28,rel.axis.size = .85, point.size = 7,facet.label.off = F)
+
+ggsave("fig4.smbe.png",fig4.smbe,width = 8.62,height = 7, units = "in")
+
 # horizontal
 # fig4.fish.det = fig4.fish.fnx(muts = "Mut123",set = "Detrimentals")#charge = black, polarity = red, polarity & volume = blue
 # # fig4.fish.bf = fig4.fish.fnx(muts = "Mut123",set = "Beneficials")
@@ -3942,94 +4330,22 @@ For cdfs, obviously option 2 is better, though option 1 is better in terms of no
 Figure 4, shown in paper is fitness difference between C and R of mutations used for Ts vs Tv fitness differences, that is, amino acid substitutions accessible by either a single Ts or a single Tv and not both.  Figure is saved as "fig4.tstv".  Other figures here are also made, C vs. R fitness for all amino acid substitutions accessible by by a single point mutation ("fig4.m1") and all amino acid substitutions ("fig4.m123").
 
 
-###7) Table III: Fisher TsTv OR for C/R
-```{r FIG5}
+###7) Table 2: Fisher TsTv OR for C/R
+```{r TABLE2}
 #data----
-table3.dat = tstv.rc
-row.names(table3.dat) = NULL
-table3.dat %<>% rename(c(pvalue = "p.value")) %>% mutate(Study = map.xstop(Gene),Class = mapvalues(Class,c("charge","polarity","pv"),c("Charge","Polarity","Polarity & Volume")))
-
-#pl fnxs----
-# ##horizontal faceting by class
-# fig5.fa.fnx = function(dat = fig5.dat,
-#                        sig.level = .05,
-#                        study = NULL,
-#                        class = NULL,
-#                        title = NULL,
-#                        Facet = "Class",
-#                        Scales = "fixed", #can be "free","free_x","free_y"
-#                        bonf = F,
-#                        nhypo = 1
-# ){
-# 
-#   dat %<>% sub.pl(study = study,class = class)
-#   dat %<>% sig.pl(sig.level,bonf,nhypo)
-#   
-#   #plot
-#   pl = ggplot(data = dat,aes(y = OR,x = Study))+
-#     geom_point(stat = "identity",
-#                size = 4,
-#                shape = 21,
-#                fill = "white")+ #outlines of all points
-#     geom_point(stat = "identity",
-#                size = 4,
-#                mapping = aes(alpha = sig))+
-#     scale_alpha_manual(values = c(1,0))+ #solid fill for all sig points
-#     geom_errorbar(aes(x = Study, ymax = OR_CI95_upper,ymin = OR_CI95_lower),width = .5)+
-#     geom_hline(aes(yintercept = 1))+
-#     ggtitle(title)
-# 
-#   pl %<>% faceting(Facet,Scales)
-# 
-#   pl+expand_limits(y=0)+guides(alpha = F)
-# }
-# 
-# ##no faceting-one graph, with class being color, looks bad with error bars. Could change to shape being class if don't want to use another color figure price.
-# fig5.fnx = function(dat = fig5.dat,
-#                     sig.level = .05,
-#                     study = NULL,
-#                     class = NULL,
-#                     title = NULL,
-#                     Facet = "Class",
-#                     Scales = "fixed", #can be "free","free_x","free_y"
-#                     bonf = F,
-#                     nhypo = 1
-# ){
-# 
-#   dat %<>% sub.pl(study = study,class = class)
-#   dat %<>% sig.pl(sig.level,bonf,nhypo)
-# 
-#   #plot
-#   pl = ggplot(data = dat,aes(y = OR,x = Study,color = Class))+
-#     geom_point(stat = "identity",
-#                size = 4,
-#                shape = 21,
-#                fill = "white"
-#                )+ #outlines of all points
-#     geom_point(stat = "identity",
-#                size = 4,
-#                mapping = aes(alpha = sig))+
-#     scale_alpha_manual(values = c(1,0))+ #solid fill for all sig points
-#     # geom_errorbar(aes(x = Study, ymax = OR_CI95_upper,ymin = OR_CI95_lower),width = .5)+
-#     geom_hline(aes(yintercept = 1))+
-#     ggtitle(title)+
-#     scale_color_manual(values = c("black","red","blue","green"))+
-#     ylab("Odds Ratio")+
-#     xlab(NULL)
-#   pl+expand_limits(y=0)+theme(legend.position = "none")
-# }
-# 
-# fig5 = fig5.fnx(study = bl.levels) #now a table.
+table2.dat = tstv.rc
+row.names(table2.dat) = NULL
+table2.dat %<>% rename(c(pvalue = "p.value")) %>% mutate(Study = map.xstop(Gene),Class = mapvalues(Class,c("charge","polarity","pv"),c("Charge","Polarity","Polarity & Volume")))
 
 #table----
-table3 = table3.dat %>% subset(Study %in% bl.levels,select = c(Gene,Class,OR,p.value)) %>% arrange(Class) %>% mutate(sig = ifelse(p.value<.05,"*","")) %>% subset(select = c(Gene,Class,OR,sig)) %>% mutate(OR = round(OR,2) %>% paste0(sig)) %>% subset(select = c(Gene,Class,OR))
+table2 = table2.dat %>% subset(Study %in% bl.levels,select = c(Gene,Class,OR,p.value)) %>% arrange(Class) %>% mutate(sig = ifelse(p.value<.05,"*","")) %>% subset(select = c(Gene,Class,OR,sig)) %>% mutate(OR = round(OR,2) %>% paste0(sig)) %>% subset(select = c(Gene,Class,OR))
 
 
 
-
+#end----
 ```
 
-No bonferroni correction for these, since just want to know if each of the classes are significant in each of the genes, not if any of them are significant.
+No multiple testing correction for these, since just want to know if each of the classes are significant in each of the genes, not if any of them are significant.
 
 
 ###8) Fig. 5 & 6: Fisher & CDF - TsTv Among C/R
@@ -4082,6 +4398,10 @@ fig6.c.cdf = rbind(
         c.cdf$pv$data$bf %>% mutate(Set = "Beneficials",Class = "Polarity & Volume")
   )
 ) %>% mutate(Study = map.xstop(Study))
+
+fig5.table = fig5.r.fish %>% subset(Set == "Detrimentals", select = c(Study,Class,threshold,OR,OR_CI95_lower,p.value)) %>% rename(c(Study = "Dataset",threshold = "Rel. Site Pref. Cutoff",OR = "Odds Ratio"))
+
+fig6.table = fig6.c.fish %>% subset(Set == "Detrimentals", select = c(Study,Class,threshold,OR,OR_CI95_lower,p.value)) %>% rename(c(Study = "Dataset",threshold = "Rel. Site Pref. Cutoff",OR = "Odds Ratio"))
 
 #pl fnx----
 fig5.cdf.fnx = function(
@@ -4148,7 +4468,7 @@ fig5.r.fish.surf = fig4.fish.fnx(dat = fig5.r.fish,set = "Detrimentals",study = 
 
 fig5.r = plot_grid(fig5.r.cdf.int,fig5.r.fish.int,fig5.r.cdf.surf,fig5.r.fish.surf,rel_heights = c(.6,.4,.6,.4),nrow = 4,align = "v",labels = c("A","","B"), label_size = pl.lab.font.size)
 
-#fig7
+#fig
 fig6.c.cdf.int = fig5.cdf.fnx(dat = fig6.c.cdf,set = "Detrimentals",study = bl.levels[1:2],title = NULL,text.off = F,facet.label.off = F)
 fig6.c.fish.int = fig4.fish.fnx(dat = fig6.c.fish,set = "Detrimentals",study = bl.levels[1:2],title = NULL,text.off = F,use.ylims = F)
 
@@ -4158,12 +4478,16 @@ fig6.c.fish.surf = fig4.fish.fnx(dat = fig6.c.fish,set = "Detrimentals",study = 
 fig6.c = plot_grid(fig6.c.cdf.int,fig6.c.fish.int,fig6.c.cdf.surf,fig6.c.fish.surf,rel_heights = c(.6,.4,.6,.4),nrow = 4,align = "v",labels = c("A","","B"), label_size = pl.lab.font.size)
 
 #pres
-pres.fig5.fish.np = fig4.fish.fnx(dat = fig5.r.fish,set = "Detrimentals",class  = "Charge",study = "NP (H1N1)",title = NULL,use.ylims = F,text.off = F,facet.label.off = F,bonf = F,point.size = 3.5)+ylim(0,3)
-pres.fig3.fish.np = fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = "NP (H1N1)",title = NULL,use.ylims = F,text.off = F,point.size = 3.5,facet.label.off = F,bonf = F)+ylim(0,3)
+pres.fig5.fish.np = fig4.fish.fnx(dat = fig5.r.fish,set = "Detrimentals",class  = "Charge",study = "NP (H1N1)",title = NULL,use.ylims = F,text.off = F,facet.label.off = F,corr.method = "NONE",point.size = 3.5)+ylim(0,3)
+pres.fig3.fish.np = fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = "NP (H1N1)",title = NULL,use.ylims = F,text.off = F,point.size = 3.5,facet.label.off = F,corr.method = "NONE")+ylim(0,3)
 
-pres.fig3.fish.env = fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = "HIV ENV",title = NULL,use.ylims = F,text.off = F,point.size = 3.5,facet.label.off = F,bonf = F)+ylim(0,6)
-pres.fig5.fish.env = fig4.fish.fnx(dat = fig5.r.fish,set = "Detrimentals",class  = "Polarity",study = "HIV ENV",title = NULL,use.ylims = F,text.off = F,facet.label.off = F,bonf = F,point.size = 3.5)+ylim(0,6)
+pres.fig3.fish.env = fig2.fish.fnx(dat = fig3.fish.dat,bl.other = "bl",study = "HIV ENV",title = NULL,use.ylims = F,text.off = F,point.size = 3.5,facet.label.off = F,corr.method = "NONE")+ylim(0,6)
+pres.fig5.fish.env = fig4.fish.fnx(dat = fig5.r.fish,set = "Detrimentals",class  = "Polarity",study = "HIV ENV",title = NULL,use.ylims = F,text.off = F,facet.label.off = F,corr.method = "NONE",point.size = 3.5)+ylim(0,6)
 
+#SMBE
+fig5.smbe = smbe.fig4.fish.fnx(dat = fig6.c.fish,set = "Detrimentals",study = bl.levels[4],title = NULL,text.off = F, font.size = 28,rel.axis.size = .85, point.size = 7,facet.label.off = F,use.ylims = F)
+
+ggsave("fig5.smbe.png",fig5.smbe,width = 8.62,height = 7, units = "in")
 
 
 #prev. option 1----
@@ -4204,62 +4528,81 @@ pres.fig5.fish.env = fig4.fish.fnx(dat = fig5.r.fish,set = "Detrimentals",class 
 #fig 1
 ggsave("fig1.pdf",fig1,width = 16.9,height = 24, units = "cm")
 
-
-#table I
-write.csv(table1, file = "TABLE.I.csv", row.names = F)
-
 #fig 2
 ggsave("fig2.pdf",fig2,width = 16.9,height = 24,units = "cm")
 
-#table 2
-table2 %>% write.csv(file = "TABLE.II.csv",row.names = F)
+#table 1
+write.csv(table1, file = "TABLE1.csv", row.names = F)
 
 #fig 3
 ggsave("fig3.pdf",fig3,width = 16.9,height = 24,units = "cm")
 
 #fig 4
-ggsave("fig4.m123.pdf",fig4.m123,width = 16.9,height = 24,units = "cm")
-ggsave("fig4.m1.pdf",fig4.m1,width = 16.9,height = 24,units = "cm")
-ggsave("fig4.tstv.pdf",fig4.tstv,width = 16.9,height = 24,units = "cm")
+# ggsave("fig4.m123.pdf",fig4.m123,width = 16.9,height = 24,units = "cm")
+# ggsave("fig4.m1.pdf",fig4.m1,width = 16.9,height = 24,units = "cm")
+ggsave("fig4.pdf",fig4.tstv,width = 16.9,height = 24,units = "cm")
 
+#table 2
+table2 %>% write.csv(file = "TABLE2.csv",row.names = F)
 
-#fig 5
-write.csv(table3, file = "TABLE.III.csv", row.names = F)
-
-#fig 6 & 7
+#fig 5 & 6
 ggsave("fig5.pdf",fig5.r,width = 16.9,height = 24, units = "cm")
 ggsave("fig6.pdf",fig6.c,width = 16.9,height = 24, units = "cm")
 
 
 ```
-I think for fig2 and fig3 will have to make each graph individually and align them so can take out facet titles and make things bigger. And change OR breaks just to 0,1,2, and 5 for HIV ENV
-
 
 
 ##Supplemental Figures & Tables
-1) Supplemental Table I: AUC Viable Mutations-Other Viruses
-2) Supplemental Figure 1: Coefficient of Variance-Other Viruses
-3) Supplemental Figure 2: AUC Decreasing Thresholds
-4) Supplemental Table II: Amino Acid Categories
-###1) Supplemental Table I: AUC Viable Mutations-Other Viruses
-```{r SUPP.TABLE.I}
-supp.table1 = each %>%
-  subset(set == "detrimental & viable_xSTOP",select = -c(alternative,statistic.W,N_TS,N_TV,set)) %>% 
-  mutate(Study = map.xstop(Study),p.value = round(p.value %>% as.vector %>% as.numeric,3),auc = round(auc %>% as.vector %>% as.numeric,3)) %>% subset(!(Study %in% c(to.names.bl,"Bloom_Flu","Lauring_gw"))) %>% rename(c(Study = "Dataset",auc = "AUC",p.value = "p-value")) %>% subset(select = c("Dataset","AUC","p-value")) %>% arrange(Dataset)
+1) Supplemental Table 1: N (& Power, removed)
+2) Supplemental Table 1.removed: AUC Viable Mutations-Other Viruses (removed)
+3) Supplemental Figure 1.removed: Coefficient of Variance-Other Viruses (removed)
+4) Supplemental Figure 1: AUC Decreasing Thresholds
+5) Supplemental Table 2: Amino Acid Categories
+###1) Supplemental Table 1: N (& Power, removed in final manuscript)
+```{r SUPP.TABLE1}
+n = each %>% subset(grepl("STOP",set) & (set == "detrimental_xSTOP"|set == "detrimental & viable_xSTOP") & Study != "Bloom_Flu" & Study != "Lauring_gw", select = c(Study, set, N_TS,N_TV)) 
 
-row.names(supp.table1) = NULL
+n$Study = n$Study %>% as.vector
+n$set = n$set %>% as.vector
 
-supp.table1 = merge(table1 %>% subset(set == "Viable"),supp.table1) %>% arrange(-Total) %>% subset(select = c("Dataset","Total","AUC","p-value")) %>% rename(c("p-value" = "P value", Total = "N"))   #adds N for viable, arranges in decreasing order of N.
+n.both = ddply(n,.(Study,set), summarize, TS = N_TS, TV = N_TV, Total = N_TS+N_TV) %>% mutate(set = mapvalues(set, c("detrimental_xSTOP", "detrimental & viable_xSTOP"), c("All","Viable")),Study = map.xstop(Study))
+
+power = as.data.frame(power_n_sim) %>% 
+  mutate(set = rownames(power_n_sim)) %>%
+  subset(set == "detrimental_xSTOP" | set == "detrimental & viable_xSTOP") %>%
+  melt(.(set)) %>%
+  mutate(set = mapvalues(set, c("detrimental_xSTOP", "detrimental & viable_xSTOP"), c("All","Viable"))) %>%
+  rename(c(variable = "Study", value = "Power")) %>%
+  mutate(Power = Power * 100,Study = map.xstop(Study))
+
+power = subset(n.both,! Study %in% power$Study, select = c(Study, set)) %>% mutate(Power = NA) %>% rbind(power)
+
+table1.removed = merge(n.both,power) %>% arrange(set,-Total) %>% mutate(set = mapvalues(set,"All","All Fitness Levels")) %>% rename(c(Study = "Dataset"))
+
+supp.table1 = table1.removed %>% subset(set == "All Fitness Levels", select = c(Dataset,TS,TV,Total))
 
 ```
 
-###2) Supplemental Figure 1: Coefficient of Variance-Other Viruses
-```{r SUPP.FIG.1}
-supp.fig1.dat = all_studies %>% subset(!grepl("Bloom",Study) & !is.na(Fitness.SD) & S_NS == "NS" & (is.na(Dataset)|Dataset != "Described") & Fitness.Mean<=1 & !grepl("stop|STOP",AA_Sub) & !(grepl("Stop",AA_Sub) & Study == "VSV"), select = c(S_NS, Fitness.CV,Study,Dataset)) %>%
+###2) Supplemental Table 1.removed: AUC Viable Mutations-Other Viruses (removed)
+```{r SUPP.TABLE1.removed}
+supp.table1.removed = each %>%
+  subset(set == "detrimental & viable_xSTOP",select = -c(alternative,statistic.W,N_TS,N_TV,set)) %>% 
+  mutate(Study = map.xstop(Study),p.value = round(p.value %>% as.vector %>% as.numeric,3),auc = round(auc %>% as.vector %>% as.numeric,3)) %>% subset(!(Study %in% c(to.names.bl,"Bloom_Flu","Lauring_gw"))) %>% rename(c(Study = "Dataset",auc = "AUC",p.value = "p-value")) %>% subset(select = c("Dataset","AUC","p-value")) %>% arrange(Dataset)
+
+row.names(supp.table1.removed) = NULL
+
+supp.table1.removed = merge(table1.removed %>% subset(set == "Viable"),supp.table1.removed) %>% arrange(-Total) %>% subset(select = c("Dataset","Total","AUC","p-value")) %>% rename(c("p-value" = "P value", Total = "N"))   #adds N for viable, arranges in decreasing order of N.
+
+```
+
+###3) Supplemental Figure 1.removed: Coefficient of Variance-Other Viruses
+```{r SUPP.FIG1.removed}
+supp.fig1.dat.removed = all_studies %>% subset(!grepl("Bloom",Study) & !is.na(Fitness.SD) & S_NS == "NS" & (is.na(Dataset)|Dataset != "Described") & Fitness.Mean<=1 & !grepl("stop|STOP",AA_Sub) & !(grepl("Stop",AA_Sub) & Study == "VSV"), select = c(S_NS, Fitness.CV,Study,Dataset)) %>%
   mutate(Study = map.xstop(Study)) %>%
   mutate(Study = factor(Study,levels = other.levels))
 
-supp.fig1 = ggplot(data = supp.fig1.dat)+
+supp.fig1.removed = ggplot(data = supp.fig1.dat.removed)+
   geom_boxplot(aes(x = Study,y = Fitness.CV %>% as.vector %>% as.numeric))+
   ylab("Coefficient of Variance for Each Mutation")
 
@@ -4267,22 +4610,24 @@ supp.fig1 = ggplot(data = supp.fig1.dat)+
 CV for ours and other viral studies, detrimental missense mutations only that we use for analysis. TEV only reported SEM for 24 of the total mutations. 
 
 
-###3) Supplemental Figure 2: AUC Decreasing Thresholds
-```{r SUPP.FIG.2}
+###4) Supplemental Figure 1: AUC Decreasing Thresholds
+```{r SUPP.FIG1}
 
 #data----
-supp.fig2.dat = dec_thresholds %>% subset(gr.xstop(Study) & !grepl("Lauring_gw|Bloom_Flu|Bloom_H1N1",Study)) %>% mutate(Study = map.xstop(Study)) %>% mutate(Study = factor(Study,levels = c(other.levels,bl.levels)))
+supp.fig1.dat = dec_thresholds %>% subset(gr.xstop(Study) & !grepl("Lauring_gw|Bloom_Flu|Bloom_H1N1",Study)) %>% mutate(Study = map.xstop(Study)) %>% mutate(Study = factor(Study,levels = c(other.levels,bl.levels)))
 
-supp.fig2.dat$p.value = supp.fig2.dat$p.value %>% as.vector %>% as.numeric
+supp.fig1.dat$p.value = supp.fig1.dat$p.value %>% as.vector %>% as.numeric
+
+supp.fig1.table = supp.fig1.dat %>% subset(grepl("Total|Surface|Internal|HIV Combined|HIV IN|HIV CA",Study), select = c(Study,threshold,auc,p.value)) %>% rename(c(auc = "AUC",Study = "Dataset",threshold = "Rel. Fitness Threshold"))
 
 #pl----
-supp.fig2 = fig1.fnx(dat = supp.fig2.dat,study = c("Total","Internal","Surface","HIV Combined","HIV IN","HIV CA"),title = NULL,text.off = F,point.size = 2)+facet_wrap(~Study,nrow = 2,ncol = 3)
+supp.fig1 = fig1.fnx(dat = supp.fig1.dat,study = c("Total","Internal","Surface","HIV Combined","HIV IN","HIV CA"),title = NULL,text.off = F,point.size = 2)+facet_wrap(~Study,nrow = 2,ncol = 3)
 
 
 ```
 
-###4) Supplemental Table II: Amino Acid Categories
-```{r SUPP.TABLE.2}
+###5) Supplemental Table 2: Amino Acid Categories
+```{r SUPP.TABLE2}
 supp.table2.dat = aa %>% mutate(charge = mapvalues(charge,c("neut","pos","neg"),c("neutral","positive","negative")),
                                 pol_vol = gsub("neut","neutral",pol_vol) %>% gsub("_"," & ",.)) %>% arrange(pol_vol,charge,polarity) %>% subset(select = c(AA,code1,pol_vol,charge,polarity)) %>% rename(c(AA = "Amino Acids",pol_vol = "Polarity.Size",charge = "Charge", polarity = "Polarity"))
 
@@ -4304,18 +4649,35 @@ Boxes added in excel.
 ###Save PDF Supp.
 ```{r SAVE}
 
+# write.csv(table1.removed, file = "TABLE1.removed.csv", row.names = F)
+write.csv(supp.table1, file = "SUPP.TABLE1.csv", row.names = F)
 
-write.csv(supp.table1, file = "SUPP.TABLE.I.csv", row.names = F)
+# write.csv(supp.table1.removed, file = "SUPP.TABLE1.removed.csv", row.names = F)
+
+# ggsave("supp.fig1.removed.pdf",supp.fig1.removed,width = 16.9,height = 24,units = "cm")
 
 ggsave("supp.fig1.pdf",supp.fig1,width = 16.9,height = 24,units = "cm")
 
-ggsave("supp.fig2.pdf",supp.fig2,width = 16.9,height = 24,units = "cm")
-
-
-write.csv(supp.table2, file = "SUPP.TABLE.II.csv", row.names = F)
+write.csv(supp.table2, file = "SUPP.TABLE2.csv", row.names = F)
 
 
 ```
 
 
+
+
+##Github Tables
+Tables giving AUC or OR and raw, un-adjusted p-values for all figures with AUC or OR.
+```{r GITHUB.TABLES}
+
+write.csv(fig1.table, file = "fig1.table.csv", row.names = F)
+write.csv(fig2.table, file = "fig2.table.csv", row.names = F)
+write.csv(fig3.table, file = "fig3.table.csv", row.names = F)
+write.csv(fig4.table, file = "fig4.table.csv", row.names = F)
+write.csv(fig5.table, file = "fig5.table.csv", row.names = F)
+write.csv(fig6.table, file = "fig6.table.csv", row.names = F)
+write.csv(supp.fig1.table, file = "supp.fig1.table.csv", row.names = F)
+
+
+```
 
